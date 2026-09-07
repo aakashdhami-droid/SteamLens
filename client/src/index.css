@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base Styles ──────────────────────────────────────────── */
+body {
+  @apply bg-steam-dark text-gray-100 font-sans antialiased;
+  min-height: 100vh;
+}
+
+/* ── Custom Scrollbar (Steam-like) ────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-steam-dark;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-steam-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
+
+/* ── Skeleton Loading Animation ───────────────────────────── */
+.skeleton {
+  @apply bg-gradient-to-r from-steam-card via-steam-border to-steam-card;
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
