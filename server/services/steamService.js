@@ -2,6 +2,7 @@ const axios = require("axios");
 
 const STORE_API = "https://store.steampowered.com/api/appdetails";
 const REVIEWS_API = "https://store.steampowered.com/appreviews";
+const STORE_SERVICE_API = "https://api.steampowered.com/IStoreService/GetAppList/v1/";
 
 async function fetchGameDetails(appid) {
   const url = `${STORE_API}?appids=${appid}`;
@@ -69,5 +70,121 @@ async function fetchReviews(appid) {
   };
 }
 
-module.exports = { fetchGameDetails, fetchReviews };
+/**
+ * Fetch current Indian price (INR) via Steam appdetails API
+ * Never throws — returns null on failure
+ */
+async function fetchIndianPrice(appid) {
+  try {
+    const url = `${STORE_API}?appids=${appid}&cc=IN&filters=basic,price_overview`;
+    const { data } = await axios.get(url, { timeout: 10000 });
+
+    const entry = data[String(appid)];
+    if (!entry || !entry.success || !entry.data) {
+      return null;
+    }
+
+    const info = entry.data;
+
+    if (info.is_free) {
+      return {
+        appid: String(appid),
+        price_paise: null,
+        original_price_paise: null,
+        discount_percent: 0,
+        currency: "INR",
+        is_free: true,
+      };
+    }
+
+    if (info.price_overview) {
+      const po = info.price_overview;
+      if (po.currency !== "INR") {
+        console.warn(
+          `[SteamService] Warning: Expected currency INR for appid ${appid}, got ${po.currency}`
+        );
+      }
+      return {
+        appid: String(appid),
+        price_paise: po.final,
+        original_price_paise: po.initial,
+        discount_percent: po.discount_percent || 0,
+        currency: po.currency || "INR",
+        is_free: false,
+      };
+    }
+
+    return null;
+  } catch (err) {
+    console.warn(
+      `[SteamService] Failed to fetch Indian price for appid ${appid}:`,
+      err.message
+    );
+    return null;
+  }
+}
+
+/**
+ * Query Steam catalogue for changed apps since a timestamp (if_modified_since)
+ * Paginates through GetAppList and returns a Map of appid -> { last_modified, price_change_number }
+ * Never throws — returns empty Map on failure
+ */
+async function fetchCatalogueChanges(sinceUnixSeconds, steamApiKey) {
+  const deltaMap = new Map();
+
+  if (!steamApiKey) {
+    console.warn("[SteamService] fetchCatalogueChanges skipped: STEAM_API_KEY is not configured.");
+    return deltaMap;
+  }
+
+  try {
+    let haveMoreResults = true;
+    let lastAppid = null;
+    let pageCount = 0;
+    const maxPages = 20; // safety ceiling
+
+    while (haveMoreResults && pageCount < maxPages) {
+      pageCount++;
+      let url = `${STORE_SERVICE_API}?key=${steamApiKey}&if_modified_since=${sinceUnixSeconds}&include_games=true&include_dlc=false&include_software=false&include_videos=false&include_hardware=false&max_results=50000`;
+      if (lastAppid) {
+        url += `&last_appid=${lastAppid}`;
+      }
+
+      const { data } = await axios.get(url, { timeout: 15000 });
+
+      if (!data || !data.response || !Array.isArray(data.response.apps)) {
+        break;
+      }
+
+      for (const app of data.response.apps) {
+        deltaMap.set(String(app.appid), {
+          last_modified: app.last_modified,
+          price_change_number: app.price_change_number,
+        });
+      }
+
+      haveMoreResults = Boolean(data.response.have_more_results);
+      lastAppid = data.response.last_appid;
+
+      if (!haveMoreResults || !lastAppid) {
+        break;
+      }
+    }
+
+    return deltaMap;
+  } catch (err) {
+    console.error(
+      "[SteamService] Failed to fetch catalogue changes from Steam:",
+      err.message
+    );
+    return deltaMap;
+  }
+}
+
+module.exports = {
+  fetchGameDetails,
+  fetchReviews,
+  fetchIndianPrice,
+  fetchCatalogueChanges,
+};
 

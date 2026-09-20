@@ -3,6 +3,8 @@ const { Pool } = require("pg");
 let pool = null;
 let isPgConnected = false;
 const memoryStore = new Map();
+const memoryTrackedGames = new Map();
+const memoryPriceHistory = [];
 
 function getPool() {
   if (!pool && process.env.DATABASE_URL) {
@@ -57,6 +59,59 @@ async function initDB() {
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_summaries_created_at ON summaries (created_at DESC)
+      `);
+
+      // ── Price Tracking tables ──
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS tracked_games (
+          id                    SERIAL PRIMARY KEY,
+          appid                 VARCHAR(20) UNIQUE NOT NULL,
+          game_name             TEXT NOT NULL,
+          tracking_started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_checked_at       TIMESTAMPTZ,
+          price_change_number   BIGINT,
+          is_active             BOOLEAN NOT NULL DEFAULT TRUE
+        )
+      `);
+
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_tracked_games_appid ON tracked_games (appid)
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_tracked_games_active ON tracked_games (is_active) WHERE is_active = TRUE
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS price_history (
+          id                    SERIAL PRIMARY KEY,
+          appid                 VARCHAR(20) NOT NULL,
+          price_paise           INTEGER,
+          currency              VARCHAR(10) NOT NULL DEFAULT 'INR',
+          original_price_paise  INTEGER,
+          discount_percent      INTEGER DEFAULT 0,
+          is_free               BOOLEAN DEFAULT FALSE,
+          recorded_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      // Migration check in case table was created with old column names
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='price_history' AND column_name='price_cents') THEN
+            ALTER TABLE price_history RENAME COLUMN price_cents TO price_paise;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='price_history' AND column_name='original_price_cents') THEN
+            ALTER TABLE price_history RENAME COLUMN original_price_cents TO original_price_paise;
+          END IF;
+        END $$;
+      `);
+
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_price_history_appid ON price_history (appid)
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_price_history_appid_recorded ON price_history (appid, recorded_at DESC)
       `);
 
       isPgConnected = true;
@@ -190,6 +245,170 @@ async function deleteCached(appid) {
   memoryStore.delete(String(appid));
 }
 
+// ── Price Tracking functions ──────────────────────────────
+
+async function addTrackedGame(appid, gameName) {
+  if (isPgConnected && pool) {
+    try {
+      const { rowCount } = await pool.query(
+        `INSERT INTO tracked_games (appid, game_name)
+         VALUES ($1, $2)
+         ON CONFLICT (appid) DO NOTHING`,
+        [String(appid), gameName]
+      );
+      return { isNew: rowCount > 0 };
+    } catch (err) {
+      console.error("PostgreSQL addTrackedGame error:", err.message);
+    }
+  }
+
+  const key = String(appid);
+  if (!memoryTrackedGames.has(key)) {
+    memoryTrackedGames.set(key, {
+      id: memoryTrackedGames.size + 1,
+      appid: key,
+      game_name: gameName,
+      tracking_started_at: new Date().toISOString(),
+      last_checked_at: null,
+      price_change_number: null,
+      is_active: true,
+    });
+    return { isNew: true };
+  }
+  return { isNew: false };
+}
+
+async function getActiveTrackedGames() {
+  if (isPgConnected && pool) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM tracked_games WHERE is_active = TRUE`
+      );
+      return rows;
+    } catch (err) {
+      console.error("PostgreSQL getActiveTrackedGames error:", err.message);
+    }
+  }
+
+  return Array.from(memoryTrackedGames.values()).filter((g) => g.is_active);
+}
+
+async function updateTrackedGameAfterCheck(appid, priceChangeNumber) {
+  if (isPgConnected && pool) {
+    try {
+      await pool.query(
+        `UPDATE tracked_games
+         SET last_checked_at = NOW(),
+             price_change_number = $2
+         WHERE appid = $1`,
+        [String(appid), priceChangeNumber]
+      );
+      return;
+    } catch (err) {
+      console.error("PostgreSQL updateTrackedGameAfterCheck error:", err.message);
+    }
+  }
+
+  const game = memoryTrackedGames.get(String(appid));
+  if (game) {
+    game.last_checked_at = new Date().toISOString();
+    game.price_change_number = priceChangeNumber;
+  }
+}
+
+async function savePriceSnapshot(data) {
+  if (isPgConnected && pool) {
+    try {
+      // Check the most recent snapshot — skip if price is identical
+      const { rows } = await pool.query(
+        `SELECT price_paise, original_price_paise, discount_percent, is_free
+         FROM price_history
+         WHERE appid = $1
+         ORDER BY recorded_at DESC
+         LIMIT 1`,
+        [String(data.appid)]
+      );
+
+      if (rows.length > 0) {
+        const last = rows[0];
+        if (
+          last.price_paise === data.price_paise &&
+          last.original_price_paise === data.original_price_paise &&
+          last.discount_percent === data.discount_percent &&
+          last.is_free === data.is_free
+        ) {
+          return { inserted: false };
+        }
+      }
+
+      await pool.query(
+        `INSERT INTO price_history
+           (appid, price_paise, currency, original_price_paise, discount_percent, is_free)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          String(data.appid),
+          data.price_paise ?? null,
+          data.currency || "INR",
+          data.original_price_paise ?? null,
+          data.discount_percent ?? 0,
+          data.is_free ?? false,
+        ]
+      );
+      return { inserted: true };
+    } catch (err) {
+      console.error("PostgreSQL savePriceSnapshot error:", err.message);
+    }
+  }
+
+  // In-memory fallback
+  const appidStr = String(data.appid);
+  const appSnapshots = memoryPriceHistory.filter((s) => s.appid === appidStr);
+  if (appSnapshots.length > 0) {
+    const last = appSnapshots[appSnapshots.length - 1];
+    if (
+      last.price_paise === data.price_paise &&
+      last.original_price_paise === data.original_price_paise &&
+      last.discount_percent === data.discount_percent &&
+      last.is_free === data.is_free
+    ) {
+      return { inserted: false };
+    }
+  }
+
+  memoryPriceHistory.push({
+    id: memoryPriceHistory.length + 1,
+    appid: appidStr,
+    price_paise: data.price_paise ?? null,
+    currency: data.currency || "INR",
+    original_price_paise: data.original_price_paise ?? null,
+    discount_percent: data.discount_percent ?? 0,
+    is_free: data.is_free ?? false,
+    recorded_at: new Date().toISOString(),
+  });
+  return { inserted: true };
+}
+
+async function getLatestPrice(appid) {
+  if (isPgConnected && pool) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM price_history
+         WHERE appid = $1
+         ORDER BY recorded_at DESC
+         LIMIT 1`,
+        [String(appid)]
+      );
+      return rows.length > 0 ? rows[0] : null;
+    } catch (err) {
+      console.error("PostgreSQL getLatestPrice error:", err.message);
+    }
+  }
+
+  const appidStr = String(appid);
+  const appSnapshots = memoryPriceHistory.filter((s) => s.appid === appidStr);
+  return appSnapshots.length > 0 ? appSnapshots[appSnapshots.length - 1] : null;
+}
+
 async function closeDB() {
   if (pool && isPgConnected) {
     await pool.end();
@@ -205,5 +424,11 @@ module.exports = {
   deleteCached,
   closeDB,
   isPostgresConnected: () => isPgConnected,
+  // Price tracking
+  addTrackedGame,
+  getActiveTrackedGames,
+  updateTrackedGameAfterCheck,
+  savePriceSnapshot,
+  getLatestPrice,
 };
 

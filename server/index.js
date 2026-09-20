@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { initDB, closeDB, isPostgresConnected } = require("./db/database");
+const { startPriceCollector, stopPriceCollector } = require("./services/priceCollector");
 const gameRoutes = require("./routes/game");
 
 const app = express();
@@ -45,6 +46,7 @@ async function start() {
 
     app.listen(PORT, () => {
       console.log(`🚀 SteamLens API running on http://localhost:${PORT}`);
+      startPriceCollector();
     });
   } catch (err) {
     console.error("❌ Failed to start server:", err.message);
@@ -54,14 +56,17 @@ async function start() {
 
 process.on("SIGINT", async () => {
   console.log("\n🛑 Shutting down...");
+  stopPriceCollector();
   await closeDB();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
+  stopPriceCollector();
   await closeDB();
   process.exit(0);
 });
 
 start();
+
 

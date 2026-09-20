@@ -16,7 +16,7 @@ export default function ProsCons({ pros, cons }) {
               d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          Pros
+          Why players praise it
         </h3>
         <ul className="space-y-3">
           {(pros || []).map((pro, i) => (
@@ -57,7 +57,7 @@ export default function ProsCons({ pros, cons }) {
               d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          Cons
+          What players criticize
         </h3>
         <ul className="space-y-3">
           {(cons || []).map((con, i) => (
@@ -85,4 +85,5 @@ export default function ProsCons({ pros, cons }) {
     </div>
   );
 }
+
 

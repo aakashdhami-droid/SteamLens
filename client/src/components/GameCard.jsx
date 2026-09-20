@@ -9,6 +9,7 @@ export default function GameCard({ data }) {
     reviews_fetched,
     reviews_sent_to_ai,
     total_reviews_fetched,
+    price_info,
   } = data;
 
   const hasReviewCounts =
@@ -25,6 +26,51 @@ export default function GameCard({ data }) {
 
   const fetched = reviews_fetched || total_reviews_fetched || 0;
   const sentToAi = reviews_sent_to_ai || 0;
+
+  function renderPrice() {
+    if (!price_info) return null;
+
+    if (price_info.is_free) {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <span>Free to Play</span>
+        </div>
+      );
+    }
+
+    if (price_info.price_paise != null) {
+      const formattedFinal = `₹${(price_info.price_paise / 100).toLocaleString("en-IN")}`;
+      const formattedOriginal = price_info.original_price_paise
+        ? `₹${(price_info.original_price_paise / 100).toLocaleString("en-IN")}`
+        : null;
+
+      const hasDiscount =
+        price_info.discount_percent > 0 &&
+        formattedOriginal &&
+        price_info.original_price_paise > price_info.price_paise;
+
+      return (
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/5 border border-white/10 text-white">
+          {hasDiscount && (
+            <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-[11px] font-bold">
+              -{price_info.discount_percent}%
+            </span>
+          )}
+          {hasDiscount && (
+            <span className="text-gray-400 line-through text-[11px]">
+              {formattedOriginal}
+            </span>
+          )}
+          <span className="text-gray-100 font-bold">{formattedFinal}</span>
+          <span className="text-[10px] text-gray-400 font-normal uppercase tracking-wider">
+            INR
+          </span>
+        </div>
+      );
+    }
+
+    return null;
+  }
 
   return (
     <div
@@ -48,14 +94,26 @@ export default function GameCard({ data }) {
             <h2 className="text-xl sm:text-2xl font-bold text-white">
               {game_name}
             </h2>
-            {total_reviews > 0 && (
+            {hasReviewCounts ? (
+              <div className="text-xs sm:text-sm text-gray-400 space-y-0.5">
+                <p>
+                  <span className="text-gray-300 font-medium">{total_positive.toLocaleString()}</span> positive /{" "}
+                  <span className="text-gray-300 font-medium">{total_negative.toLocaleString()}</span> negative
+                </p>
+                <p className="text-[11px] text-gray-500">
+                  Based on Steam&apos;s reported review population ({totalVotes.toLocaleString()} total)
+                </p>
+              </div>
+            ) : total_reviews > 0 ? (
               <p className="text-sm text-gray-400">
-                {total_reviews.toLocaleString()} total reviews
+                {total_reviews.toLocaleString()} total Steam reviews
               </p>
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {renderPrice()}
+
             {positivePercent !== null && (
               <span
                 className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full border ${getPercentColor(
@@ -96,15 +154,15 @@ export default function GameCard({ data }) {
         </div>
 
         {sentToAi > 0 && (
-          <p className="mt-3 text-xs text-gray-500">
+          <p className="mt-3 text-xs text-gray-500 border-t border-steam-border/50 pt-3">
             <span className="text-gray-400 font-medium">{sentToAi}</span>{" "}
-            reviews analyzed
+            curated reviews analyzed by SteamLens
             {fetched > 0 && (
               <>
                 {" "}
-                from{" "}
+                (sampled from{" "}
                 <span className="text-gray-400 font-medium">{fetched}</span>{" "}
-                fetched
+                recent reviews)
               </>
             )}
           </p>
@@ -113,4 +171,5 @@ export default function GameCard({ data }) {
     </div>
   );
 }
+
 

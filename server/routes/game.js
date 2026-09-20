@@ -1,10 +1,19 @@
 const express = require("express");
 const router = express.Router();
 
-const { fetchGameDetails, fetchReviews } = require("../services/steamService");
+const { fetchGameDetails, fetchReviews, fetchIndianPrice } = require("../services/steamService");
 const { processReviews } = require("../services/reviewProcessor");
 const { summarizeReviews } = require("../services/groqService");
-const { getCached, saveSummary, getAllCached, deleteCached, initDB } = require("../db/database");
+const {
+  getCached,
+  saveSummary,
+  getAllCached,
+  deleteCached,
+  addTrackedGame,
+  savePriceSnapshot,
+  getLatestPrice,
+} = require("../db/database");
+const { runCollectorOnce, getCollectorStatus } = require("../services/priceCollector");
 
 router.get("/game/:appid", async (req, res, next) => {
   try {
@@ -16,6 +25,13 @@ router.get("/game/:appid", async (req, res, next) => {
 
     const cached = await getCached(appid);
     if (cached) {
+      let price_info = null;
+      try {
+        price_info = await getLatestPrice(appid);
+      } catch (err) {
+        console.warn(`[GameRoute] Failed to get price for cached appid ${appid}:`, err.message);
+      }
+
       return res.json({
         cached: true,
         appid: cached.appid,
@@ -30,6 +46,7 @@ router.get("/game/:appid", async (req, res, next) => {
         confidence: cached.confidence,
         total_reviews_fetched: cached.total_reviews_fetched,
         reviews_sent_to_ai: cached.reviews_sent_to_ai,
+        price_info,
       });
     }
 
@@ -66,6 +83,21 @@ router.get("/game/:appid", async (req, res, next) => {
       reviews_sent_to_ai: stats.sampled,
     });
 
+    // ── Price Tracking Integration ──
+    let price_info = null;
+    try {
+      const { isNew } = await addTrackedGame(appid, gameDetails.name);
+      if (isNew) {
+        const initialPrice = await fetchIndianPrice(appid);
+        if (initialPrice) {
+          await savePriceSnapshot(initialPrice);
+        }
+      }
+      price_info = await getLatestPrice(appid);
+    } catch (err) {
+      console.warn(`[GameRoute] Price tracking error for appid ${appid}:`, err.message);
+    }
+
     return res.json({
       cached: false,
       appid,
@@ -82,6 +114,7 @@ router.get("/game/:appid", async (req, res, next) => {
       reviews_fetched: stats.raw,
       reviews_sent_to_ai: stats.sampled,
       processing_stats: stats,
+      price_info,
     });
   } catch (error) {
     next(error);
@@ -110,5 +143,21 @@ router.delete("/cache/:appid", async (req, res, next) => {
   }
 });
 
+// ── Background Collector Development / Monitoring Routes ──
+
+router.get("/collector/run", async (req, res, next) => {
+  try {
+    const result = await runCollectorOnce();
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/collector/status", (req, res) => {
+  res.json(getCollectorStatus());
+});
+
 module.exports = router;
+
 
