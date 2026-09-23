@@ -14,6 +14,26 @@ const {
   getLatestPrice,
 } = require("../db/database");
 const { runCollectorOnce, getCollectorStatus } = require("../services/priceCollector");
+const { searchSteam, rankAndFilter } = require("../services/searchService");
+
+// ── Game Name Search ────────────────────────────────────────
+router.get("/search", async (req, res, next) => {
+  try {
+    const query = (req.query.query || "").trim();
+
+    if (!query || query.length < 2) {
+      return res.status(400).json({ error: "Query must be at least 2 characters" });
+    }
+
+    const rawItems = await searchSteam(query);
+    const results = rankAndFilter(rawItems, query);
+
+    return res.json({ results });
+  } catch (err) {
+    console.error("[SearchRoute] Steam search failed:", err.message);
+    return res.status(502).json({ error: "Steam search is temporarily unavailable" });
+  }
+});
 
 router.get("/game/:appid", async (req, res, next) => {
   try {
