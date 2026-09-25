@@ -8,8 +8,8 @@ async function fetchGameDetails(appid) {
   const url = `${STORE_API}?appids=${appid}`;
   const { data } = await axios.get(url);
 
-  const entry = data[String(appid)];
-  if (!entry || !entry.success) {
+  const entry = data ? (data[String(appid)] || Object.values(data)[0]) : null;
+  if (!entry || !entry.success || !entry.data) {
     throw new Error(`Steam returned no data for appid ${appid}. Is it a valid game?`);
   }
 
@@ -79,7 +79,7 @@ async function fetchIndianPrice(appid) {
     const url = `${STORE_API}?appids=${appid}&cc=IN&filters=basic,price_overview`;
     const { data } = await axios.get(url, { timeout: 10000 });
 
-    const entry = data[String(appid)];
+    const entry = data ? (data[String(appid)] || Object.values(data)[0]) : null;
     if (!entry || !entry.success || !entry.data) {
       return null;
     }
