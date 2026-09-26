@@ -409,6 +409,37 @@ async function getLatestPrice(appid) {
   return appSnapshots.length > 0 ? appSnapshots[appSnapshots.length - 1] : null;
 }
 
+async function getPriceHistory(appid) {
+  if (isPgConnected && pool) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT price_paise, currency, original_price_paise, discount_percent, is_free, recorded_at
+         FROM price_history
+         WHERE appid = $1
+         ORDER BY recorded_at ASC`,
+        [String(appid)]
+      );
+      return rows;
+    } catch (err) {
+      console.error("PostgreSQL getPriceHistory error:", err.message);
+      throw err;
+    }
+  }
+
+  const appidStr = String(appid);
+  return memoryPriceHistory
+    .filter((s) => s.appid === appidStr)
+    .sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at))
+    .map((s) => ({
+      price_paise: s.price_paise,
+      currency: s.currency,
+      original_price_paise: s.original_price_paise,
+      discount_percent: s.discount_percent,
+      is_free: s.is_free,
+      recorded_at: s.recorded_at,
+    }));
+}
+
 async function closeDB() {
   if (pool && isPgConnected) {
     await pool.end();
@@ -430,5 +461,6 @@ module.exports = {
   updateTrackedGameAfterCheck,
   savePriceSnapshot,
   getLatestPrice,
+  getPriceHistory,
 };
 

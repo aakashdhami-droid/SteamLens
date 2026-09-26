@@ -3,6 +3,7 @@ import SearchBar from "./components/SearchBar";
 import GameCard from "./components/GameCard";
 import SummaryCard from "./components/SummaryCard";
 import ProsCons from "./components/ProsCons";
+import PriceHistory from "./components/PriceHistory";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
@@ -131,11 +132,17 @@ export default function App() {
               className="animate-slide-up"
               style={{ animationDelay: "100ms", animationFillMode: "both" }}
             >
-              <SummaryCard data={result} />
+              <PriceHistory appid={result.appid} />
             </div>
             <div
               className="animate-slide-up"
               style={{ animationDelay: "200ms", animationFillMode: "both" }}
+            >
+              <SummaryCard data={result} />
+            </div>
+            <div
+              className="animate-slide-up"
+              style={{ animationDelay: "300ms", animationFillMode: "both" }}
             >
               <ProsCons pros={result.pros} cons={result.cons} />
             </div>

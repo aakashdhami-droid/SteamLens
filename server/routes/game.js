@@ -12,6 +12,7 @@ const {
   addTrackedGame,
   savePriceSnapshot,
   getLatestPrice,
+  getPriceHistory,
 } = require("../db/database");
 const { runCollectorOnce, getCollectorStatus } = require("../services/priceCollector");
 const { searchSteam, rankAndFilter } = require("../services/searchService");
@@ -32,6 +33,26 @@ router.get("/search", async (req, res, next) => {
   } catch (err) {
     console.error("[SearchRoute] Steam search failed:", err.message);
     return res.status(502).json({ error: "Steam search is temporarily unavailable" });
+  }
+});
+
+// ── Price History ───────────────────────────────────────────
+router.get("/game/:appid/price-history", async (req, res, next) => {
+  try {
+    const { appid } = req.params;
+
+    if (!/^\d+$/.test(appid)) {
+      return res.status(400).json({ error: "App ID must be a number" });
+    }
+
+    const history = await getPriceHistory(appid);
+
+    return res.json({
+      appid: Number(appid),
+      history,
+    });
+  } catch (error) {
+    next(error);
   }
 });
 
