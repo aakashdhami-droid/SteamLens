@@ -60,31 +60,73 @@ $$\text{compatibility\_percentage} = \text{round}\left(\frac{\text{raw\_average}
 
 ---
 
-## 🛠️ How to Run Locally
+## 🐳 Quick Start with Docker Compose (Recommended)
+
+Run the full SteamLens stack (PostgreSQL, Express Backend, and React Frontend with Nginx) with a single command:
+
+### Prerequisites
+- Docker Desktop or Docker Engine with Compose support
+- Free [Groq API Key](https://console.groq.com)
+
+### 1. Configure Environment
+```bash
+cp .env.example .env
+# Edit .env and set your GROQ_API_KEY (and optional STEAM_API_KEY)
+```
+
+### 2. Build & Launch Full Stack
+```bash
+docker compose up --build -d
+```
+
+### 3. Open in Browser
+- **Frontend**: [http://localhost](http://localhost) (Port 80)
+- **Backend API**: [http://localhost:3001](http://localhost:3001) / [http://localhost/api](http://localhost/api)
+- **PostgreSQL**: `localhost:5432` (Persistent volume `postgres_data`)
+
+### Useful Docker Commands
+```bash
+# View running status
+docker compose ps
+
+# View real-time logs
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f postgres
+
+# Stop containers without losing database data
+docker compose down
+
+# Rebuild and restart
+docker compose up --build -d
+```
+
+> [!NOTE]
+> Database data, price history, and cached analyses persist across restarts via the named Docker volume `postgres_data`.
+
+---
+
+## 🛠️ Local Development (Without Full Docker Stack)
 
 ### Prerequisites
 - Node.js 18+
-- Docker & Docker Compose (or local PostgreSQL)
-- Free [Groq API Key](https://console.groq.com)
-- Optional: Steam Web API Key
+- Docker (for PostgreSQL)
 
 ### 1. Start PostgreSQL
 ```bash
-docker compose up -d
+docker compose up -d postgres
 ```
 
 ### 2. Configure & Start Server
 ```bash
 cd server
-cp ../.env.example .env
-# Fill in GROQ_API_KEY, DATABASE_URL, JWT_SECRET
 npm install
 npm run dev
 ```
 
 ### 3. Configure & Start Client
 ```bash
-cd ../client
+cd client
 npm install
 npm run dev
 ```

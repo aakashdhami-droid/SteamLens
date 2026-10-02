@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+import { API_URL } from "../config";
 
 const QUICK_PICKS = [
   { name: "Dota 2", appid: "570" },

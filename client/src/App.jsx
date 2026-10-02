@@ -7,8 +7,7 @@ import ProsCons from "./components/ProsCons";
 import PriceHistory from "./components/PriceHistory";
 import AuthModal from "./components/AuthModal";
 import { useAuth } from "./contexts/AuthContext";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+import { API_URL } from "./config";
 
 export default function App() {
   const { user, logout, getAuthHeaders } = useAuth();

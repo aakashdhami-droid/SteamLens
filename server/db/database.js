@@ -10,14 +10,18 @@ function getPool() {
   if (!pool && process.env.DATABASE_URL) {
     const isLocal =
       process.env.DATABASE_URL.includes("localhost") ||
-      process.env.DATABASE_URL.includes("127.0.0.1");
+      process.env.DATABASE_URL.includes("127.0.0.1") ||
+      process.env.DATABASE_URL.includes("postgres:") ||
+      process.env.DATABASE_URL.includes("@postgres") ||
+      process.env.PGSSL === "false" ||
+      !process.env.DATABASE_URL.includes("sslmode=require");
 
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: isLocal ? false : { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 3000,
+      connectionTimeoutMillis: 5000,
     });
 
     pool.on("error", (err) => {

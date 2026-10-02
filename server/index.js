@@ -19,8 +19,12 @@ const PORT = process.env.PORT || 3001;
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    methods: ["GET", "POST", "DELETE"],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. curl, server-to-server) or any client origin
+      callback(null, true);
+    },
+    methods: ["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
+    credentials: true,
   })
 );
 app.use(express.json());
@@ -31,6 +35,13 @@ app.use("/api/games", preferencesRoutes);
 app.use("/api/game", preferencesRoutes);
 app.use("/api/preferences", preferencesRoutes);
 
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "SteamLens API",
+    database: isPostgresConnected() ? "connected" : "fallback",
+  });
+});
 
 app.get("/", (req, res) => {
   res.json({
@@ -57,8 +68,8 @@ async function start() {
   try {
     await initDB();
 
-    app.listen(PORT, () => {
-      console.log(`🚀 SteamLens API running on http://localhost:${PORT}`);
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 SteamLens API running on http://0.0.0.0:${PORT}`);
       startPriceCollector();
     });
   } catch (err) {
