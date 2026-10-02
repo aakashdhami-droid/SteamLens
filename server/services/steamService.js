@@ -15,11 +15,23 @@ async function fetchGameDetails(appid) {
 
   const info = entry.data;
 
+  // Extract genres (e.g., "Action", "RPG", "Adventure")
+  const genres = Array.isArray(info.genres)
+    ? info.genres.map((g) => g.description)
+    : [];
+
+  // Extract Steam tags / categories
+  const categories = Array.isArray(info.categories)
+    ? info.categories.map((c) => c.description)
+    : [];
+
   return {
     name: info.name,
     header_image: info.header_image,
     short_description: info.short_description || "",
     type: info.type,
+    genres,
+    tags: categories, // Steam "categories" serve as tags (Singleplayer, Multiplayer, etc.)
   };
 }
 
@@ -36,6 +48,7 @@ async function fetchReviews(appid) {
       `&num_per_page=100` +
       `&language=english` +
       `&filter=all` +
+      `&purchase_type=all` +
       `&cursor=${encodeURIComponent(cursor)}`;
 
     const { data } = await axios.get(url);

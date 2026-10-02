@@ -1,21 +1,79 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import SearchBar from "./components/SearchBar";
 import GameCard from "./components/GameCard";
+import CompatibilityCard from "./components/CompatibilityCard";
 import SummaryCard from "./components/SummaryCard";
 import ProsCons from "./components/ProsCons";
 import PriceHistory from "./components/PriceHistory";
+import AuthModal from "./components/AuthModal";
+import { useAuth } from "./contexts/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 export default function App() {
+  const { user, logout, getAuthHeaders } = useAuth();
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Auth Modal State
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  // Personalization States
+  const [userVote, setUserVote] = useState(null);
+  const [votingLoading, setVotingLoading] = useState(false);
+  const [compatibility, setCompatibility] = useState(null);
+  const [compatibilityLoading, setCompatibilityLoading] = useState(false);
+
+  const fetchCompatibilityAndVote = useCallback(
+    async (appid) => {
+      if (!appid) return;
+      setCompatibilityLoading(true);
+
+      try {
+        const headers = getAuthHeaders();
+        const compPromise = fetch(`${API_URL}/api/game/${appid}/compatibility`, {
+          headers,
+        }).then((res) => (res.ok ? res.json() : null));
+
+        const votePromise = user
+          ? fetch(`${API_URL}/api/game/${appid}/vote`, { headers }).then((res) =>
+              res.ok ? res.json() : null
+            )
+          : Promise.resolve(null);
+
+        const [compData, voteData] = await Promise.all([compPromise, votePromise]);
+
+        if (compData) {
+          setCompatibility(compData);
+        }
+        if (voteData) {
+          setUserVote(voteData.vote ?? null);
+        } else if (!user) {
+          setUserVote(null);
+        }
+      } catch (err) {
+        console.warn("[App] Error fetching compatibility/vote:", err.message);
+      } finally {
+        setCompatibilityLoading(false);
+      }
+    },
+    [user, getAuthHeaders]
+  );
+
+  // Re-fetch compatibility & vote when user logs in/out while viewing a game
+  useEffect(() => {
+    if (result?.appid) {
+      fetchCompatibilityAndVote(result.appid);
+    }
+  }, [user, result?.appid, fetchCompatibilityAndVote]);
 
   async function handleSearch(appid) {
     setLoading(true);
     setError(null);
     setResult(null);
+    setCompatibility(null);
+    setUserVote(null);
 
     try {
       const res = await fetch(`${API_URL}/api/game/${appid}`);
@@ -26,10 +84,51 @@ export default function App() {
       }
 
       setResult(data);
+      // Fetch personal compatibility & existing vote for the searched game
+      fetchCompatibilityAndVote(appid);
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleVote(vote) {
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
+
+    if (!result?.appid || votingLoading) return;
+
+    // Optimistic UI state
+    const previousVote = userVote;
+    setUserVote(vote);
+    setVotingLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/game/${result.appid}/vote`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ vote }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to record vote");
+      }
+
+      setUserVote(data.vote);
+      // Refresh compatibility after vote update
+      fetchCompatibilityAndVote(result.appid);
+    } catch (err) {
+      console.error("[Vote] Error:", err.message);
+      setUserVote(previousVote);
+    } finally {
+      setVotingLoading(false);
     }
   }
 
@@ -40,8 +139,43 @@ export default function App() {
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative max-w-3xl mx-auto px-4 py-8 sm:py-12">
-        <header className="text-center mb-10 animate-fade-in">
+      <div className="relative max-w-3xl mx-auto px-4 py-6 sm:py-10">
+        {/* ── Top Navigation / Auth Bar ── */}
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-steam-border/40">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-gray-400 font-medium">SteamLens Intelligence</span>
+          </div>
+
+          <div>
+            {user ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-steam-card border border-steam-border text-xs">
+                  <span className="text-steam-accent">●</span>
+                  <span className="text-gray-300 font-medium truncate max-w-[150px] sm:max-w-[200px]">
+                    {user.email}
+                  </span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="text-xs text-gray-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-steam-card transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-steam-accent to-blue-600 text-white hover:opacity-90 transition-opacity shadow-sm shadow-steam-accent/20"
+              >
+                <span>Sign In / Register</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Header ── */}
+        <header className="text-center mb-8 animate-fade-in">
           <div className="inline-flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-steam-accent to-blue-600 flex items-center justify-center shadow-lg shadow-steam-accent/20">
               <svg
@@ -64,8 +198,7 @@ export default function App() {
             </h1>
           </div>
           <p className="text-gray-400 text-sm sm:text-base max-w-md mx-auto">
-            AI-powered Steam review analysis. Get instant summaries of what
-            players really think.
+            AI-powered Steam review analysis & explainable personalization.
           </p>
         </header>
 
@@ -126,27 +259,52 @@ export default function App() {
         {result && !loading && (
           <div className="mt-8 space-y-6">
             <div className="animate-slide-up" style={{ animationDelay: "0ms" }}>
-              <GameCard data={result} />
+              <GameCard
+                data={result}
+                userVote={userVote}
+                onVote={handleVote}
+                votingLoading={votingLoading}
+                onOpenAuth={() => setAuthModalOpen(true)}
+              />
             </div>
+
             <div
               className="animate-slide-up"
               style={{ animationDelay: "100ms", animationFillMode: "both" }}
             >
-              <PriceHistory appid={result.appid} />
+              <CompatibilityCard
+                compatibility={compatibility}
+                loading={compatibilityLoading}
+                onOpenAuth={() => setAuthModalOpen(true)}
+              />
             </div>
+
             <div
               className="animate-slide-up"
               style={{ animationDelay: "200ms", animationFillMode: "both" }}
             >
-              <SummaryCard data={result} />
+              <PriceHistory appid={result.appid} />
             </div>
+
             <div
               className="animate-slide-up"
               style={{ animationDelay: "300ms", animationFillMode: "both" }}
             >
+              <SummaryCard data={result} />
+            </div>
+
+            <div
+              className="animate-slide-up"
+              style={{ animationDelay: "400ms", animationFillMode: "both" }}
+            >
               <ProsCons pros={result.pros} cons={result.cons} />
             </div>
           </div>
+        )}
+
+        {/* ── Auth Modal ── */}
+        {authModalOpen && (
+          <AuthModal onClose={() => setAuthModalOpen(false)} />
         )}
 
         <footer className="mt-16 text-center text-gray-600 text-xs">
@@ -168,4 +326,5 @@ export default function App() {
     </div>
   );
 }
+
 

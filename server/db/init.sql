@@ -53,4 +53,46 @@ CREATE INDEX IF NOT EXISTS idx_price_history_appid
 CREATE INDEX IF NOT EXISTS idx_price_history_appid_recorded
   ON price_history (appid, recorded_at DESC);
 
+-- ── User Authentication ──────────────────────────────────────
 
+CREATE TABLE IF NOT EXISTS users (
+  id              SERIAL PRIMARY KEY,
+  email           VARCHAR(255) UNIQUE NOT NULL,
+  password_hash   TEXT NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email
+  ON users (email);
+
+-- ── User Game Votes ──────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS user_game_votes (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  appid       VARCHAR(20) NOT NULL,
+  vote        SMALLINT NOT NULL CHECK (vote IN (-1, 1)),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, appid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_game_votes_user
+  ON user_game_votes (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_game_votes_user_appid
+  ON user_game_votes (user_id, appid);
+
+-- ── User Preferences (learned from votes) ────────────────────
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  attribute         VARCHAR(100) NOT NULL,
+  preference_score  DOUBLE PRECISION NOT NULL DEFAULT 0,
+  confidence        DOUBLE PRECISION NOT NULL DEFAULT 0,
+  interaction_count INTEGER NOT NULL DEFAULT 0,
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, attribute)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user
+  ON user_preferences (user_id);

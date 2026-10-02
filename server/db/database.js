@@ -114,6 +114,54 @@ async function initDB() {
         CREATE INDEX IF NOT EXISTS idx_price_history_appid_recorded ON price_history (appid, recorded_at DESC)
       `);
 
+      // ── User Authentication tables ──
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id              SERIAL PRIMARY KEY,
+          email           VARCHAR(255) UNIQUE NOT NULL,
+          password_hash   TEXT NOT NULL,
+          created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)
+      `);
+
+      // ── User Game Votes ──
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_game_votes (
+          id          SERIAL PRIMARY KEY,
+          user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          appid       VARCHAR(20) NOT NULL,
+          vote        SMALLINT NOT NULL CHECK (vote IN (-1, 1)),
+          created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(user_id, appid)
+        )
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_user_game_votes_user ON user_game_votes (user_id)
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_user_game_votes_user_appid ON user_game_votes (user_id, appid)
+      `);
+
+      // ── User Preferences (learned from votes) ──
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_preferences (
+          user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          attribute         VARCHAR(100) NOT NULL,
+          preference_score  DOUBLE PRECISION NOT NULL DEFAULT 0,
+          confidence        DOUBLE PRECISION NOT NULL DEFAULT 0,
+          interaction_count INTEGER NOT NULL DEFAULT 0,
+          updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (user_id, attribute)
+        )
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences (user_id)
+      `);
+
       isPgConnected = true;
       console.log("✅ PostgreSQL connected & schema initialized");
     } finally {
@@ -126,6 +174,7 @@ async function initDB() {
     );
   }
 }
+
 
 async function getCached(appid) {
   if (isPgConnected && pool) {
@@ -440,6 +489,130 @@ async function getPriceHistory(appid) {
     }));
 }
 
+// ── User Authentication functions ─────────────────────────────
+
+async function createUser(email, passwordHash) {
+  if (!isPgConnected || !pool) {
+    throw new Error("Database is not available. User registration requires PostgreSQL.");
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO users (email, password_hash)
+     VALUES ($1, $2)
+     RETURNING id, email, created_at`,
+    [email.trim().toLowerCase(), passwordHash]
+  );
+  return rows[0];
+}
+
+async function findUserByEmail(email) {
+  if (!isPgConnected || !pool) {
+    throw new Error("Database is not available.");
+  }
+  const { rows } = await pool.query(
+    `SELECT id, email, password_hash, created_at FROM users WHERE email = $1`,
+    [email.trim().toLowerCase()]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+async function findUserById(id) {
+  if (!isPgConnected || !pool) {
+    throw new Error("Database is not available.");
+  }
+  const { rows } = await pool.query(
+    `SELECT id, email, created_at FROM users WHERE id = $1`,
+    [id]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+// ── User Game Vote functions ──────────────────────────────────
+
+async function getUserVote(userId, appid) {
+  if (!isPgConnected || !pool) return null;
+  const { rows } = await pool.query(
+    `SELECT id, user_id, appid, vote, created_at, updated_at
+     FROM user_game_votes
+     WHERE user_id = $1 AND appid = $2`,
+    [userId, String(appid)]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+async function upsertUserVote(userId, appid, vote) {
+  if (!isPgConnected || !pool) {
+    throw new Error("Database is not available.");
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO user_game_votes (user_id, appid, vote)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, appid) DO UPDATE SET
+       vote = EXCLUDED.vote,
+       updated_at = NOW()
+     RETURNING id, user_id, appid, vote, created_at, updated_at`,
+    [userId, String(appid), vote]
+  );
+  return rows[0];
+}
+
+async function getUserVoteCount(userId) {
+  if (!isPgConnected || !pool) return 0;
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::integer AS count FROM user_game_votes WHERE user_id = $1`,
+    [userId]
+  );
+  return rows[0].count;
+}
+
+async function getAllUserVotes(userId) {
+  if (!isPgConnected || !pool) return [];
+  const { rows } = await pool.query(
+    `SELECT appid, vote FROM user_game_votes WHERE user_id = $1`,
+    [userId]
+  );
+  return rows;
+}
+
+// ── User Preference functions ─────────────────────────────────
+
+async function getUserPreference(userId, attribute) {
+  if (!isPgConnected || !pool) return null;
+  const { rows } = await pool.query(
+    `SELECT user_id, attribute, preference_score, confidence, interaction_count, updated_at
+     FROM user_preferences
+     WHERE user_id = $1 AND attribute = $2`,
+    [userId, attribute.toLowerCase()]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+async function upsertUserPreference(userId, attribute, preferenceScore, confidence, interactionCount) {
+  if (!isPgConnected || !pool) {
+    throw new Error("Database is not available.");
+  }
+  await pool.query(
+    `INSERT INTO user_preferences (user_id, attribute, preference_score, confidence, interaction_count, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (user_id, attribute) DO UPDATE SET
+       preference_score = EXCLUDED.preference_score,
+       confidence = EXCLUDED.confidence,
+       interaction_count = EXCLUDED.interaction_count,
+       updated_at = NOW()`,
+    [userId, attribute.toLowerCase(), preferenceScore, confidence, interactionCount]
+  );
+}
+
+async function getAllUserPreferences(userId) {
+  if (!isPgConnected || !pool) return [];
+  const { rows } = await pool.query(
+    `SELECT attribute, preference_score, confidence, interaction_count, updated_at
+     FROM user_preferences
+     WHERE user_id = $1`,
+    [userId]
+  );
+  return rows;
+}
+
 async function closeDB() {
   if (pool && isPgConnected) {
     await pool.end();
@@ -454,6 +627,7 @@ module.exports = {
   getAllCached,
   deleteCached,
   closeDB,
+  getPool,
   isPostgresConnected: () => isPgConnected,
   // Price tracking
   addTrackedGame,
@@ -462,5 +636,18 @@ module.exports = {
   savePriceSnapshot,
   getLatestPrice,
   getPriceHistory,
+  // User auth
+  createUser,
+  findUserByEmail,
+  findUserById,
+  // User votes
+  getUserVote,
+  upsertUserVote,
+  getUserVoteCount,
+  getAllUserVotes,
+  // User preferences
+  getUserPreference,
+  upsertUserPreference,
+  getAllUserPreferences,
 };
 

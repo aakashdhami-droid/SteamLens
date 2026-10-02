@@ -1,5 +1,12 @@
-export default function GameCard({ data }) {
+export default function GameCard({
+  data,
+  userVote,
+  onVote,
+  votingLoading,
+  onOpenAuth,
+}) {
   const {
+    appid,
     game_name,
     header_image,
     total_positive,
@@ -153,6 +160,43 @@ export default function GameCard({ data }) {
           </div>
         </div>
 
+        {/* ── User Rating / Voting Section ── */}
+        <div className="mt-4 pt-4 border-t border-steam-border/60 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs text-gray-400">
+            <span className="font-medium text-gray-300">Rate this game</span> to train your personal preference score:
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onVote(1)}
+              disabled={votingLoading}
+              title="Upvote: This game matches your taste"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                userVote === 1
+                  ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-sm shadow-emerald-500/20"
+                  : "bg-steam-dark/60 hover:bg-steam-dark border-steam-border text-gray-300 hover:text-white"
+              } disabled:opacity-50`}
+            >
+              <span>👍</span>
+              <span>{userVote === 1 ? "Upvoted" : "Upvote"}</span>
+            </button>
+
+            <button
+              onClick={() => onVote(-1)}
+              disabled={votingLoading}
+              title="Downvote: Not your style"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                userVote === -1
+                  ? "bg-rose-500/20 border-rose-500 text-rose-300 shadow-sm shadow-rose-500/20"
+                  : "bg-steam-dark/60 hover:bg-steam-dark border-steam-border text-gray-300 hover:text-white"
+              } disabled:opacity-50`}
+            >
+              <span>👎</span>
+              <span>{userVote === -1 ? "Downvoted" : "Downvote"}</span>
+            </button>
+          </div>
+        </div>
+
         {sentToAi > 0 && (
           <p className="mt-3 text-xs text-gray-500 border-t border-steam-border/50 pt-3">
             <span className="text-gray-400 font-medium">{sentToAi}</span>{" "}
@@ -171,5 +215,6 @@ export default function GameCard({ data }) {
     </div>
   );
 }
+
 
 
