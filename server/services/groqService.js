@@ -3,6 +3,16 @@ const axios = require("axios");
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 
+let devGroqCallCount = 0;
+
+function getDevGroqCallCount() {
+  return devGroqCallCount;
+}
+
+function resetDevGroqCallCount() {
+  devGroqCallCount = 0;
+}
+
 async function summarizeReviews(reviews, gameName) {
   const apiKey = process.env.GROQ_API_KEY;
   if (
@@ -44,6 +54,11 @@ Rules:
 - each pro/con should be a short phrase (5-10 words max)
 - sentiment must be one of: positive, mixed, negative
 - confidence is a number 0-100 representing how confident you are in this analysis based on review quality and consistency`;
+
+  if (process.env.NODE_ENV !== "production") {
+    devGroqCallCount++;
+    console.log(`[Dev-Groq] Call #${devGroqCallCount} invoked for game: ${gameName}`);
+  }
 
   try {
     const response = await axios.post(
@@ -120,5 +135,9 @@ Rules:
   }
 }
 
-module.exports = { summarizeReviews };
+module.exports = {
+  summarizeReviews,
+  getDevGroqCallCount,
+  resetDevGroqCallCount,
+};
 

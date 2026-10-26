@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 const STORE_API = "https://store.steampowered.com/api/appdetails";
-const REVIEWS_API = "https://store.steampowered.com/appreviews";
+const REVIEWS_API = "https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1/";
 const STORE_SERVICE_API = "https://api.steampowered.com/IStoreService/GetAppList/v1/";
 
 async function fetchGameDetails(appid) {
@@ -43,35 +43,62 @@ async function fetchReviews(appid) {
   let totalReviews = 0;
 
   for (let page = 0; page < 3; page++) {
-    const url =
-      `${REVIEWS_API}/${appid}?json=1` +
-      `&num_per_page=100` +
-      `&language=english` +
-      `&filter=all` +
-      `&purchase_type=all` +
-      `&cursor=${encodeURIComponent(cursor)}`;
+    const inputJson = JSON.stringify({
+      appid: Number(appid),
+      filter: 0,                // 0 = Helpful
+      languages: ["english"],   // array of language codes per docs
+      review_type: 0,           // 0 = all review types (positive + negative)
+      purchase_type: 1,         // 1 = all purchase types (Steam + keys)
+      num_per_page: 100,
+      cursor,
+    });
 
-    const { data } = await axios.get(url);
+    const url = `${REVIEWS_API}?input_json=${encodeURIComponent(inputJson)}`;
 
-    if (!data || data.success !== 1) {
+    let data;
+    try {
+      ({ data } = await axios.get(url));
+    } catch (err) {
+      console.error(
+        `[SteamService] HTTP error fetching reviews for appid ${appid}:`,
+        {
+          status: err.response?.status,
+          body: err.response?.data,
+          message: err.message,
+        }
+      );
       if (page === 0) {
         throw new Error(`Failed to fetch reviews for appid ${appid}`);
       }
       break;
     }
 
-    if (page === 0 && data.query_summary) {
-      totalPositive = data.query_summary.total_positive || 0;
-      totalNegative = data.query_summary.total_negative || 0;
-      totalReviews = data.query_summary.total_reviews || 0;
+    const response = data?.response;
+
+    // Validate response structure — the new endpoint does not use a `success` field
+    if (!response || !Array.isArray(response.reviews)) {
+      console.error(
+        `[SteamService] Unexpected response fetching reviews for appid ${appid}:`,
+        { hasReviews: Array.isArray(response?.reviews), data }
+      );
+      if (page === 0) {
+        throw new Error(`Failed to fetch reviews for appid ${appid}`);
+      }
+      break;
     }
 
-    const pageReviews = data.reviews || [];
+    if (page === 0 && response.query_summary) {
+      totalPositive = response.query_summary.total_positive || 0;
+      totalNegative = response.query_summary.total_negative || 0;
+      totalReviews = response.query_summary.total_reviews || 0;
+    }
+
+    const pageReviews = response.reviews || [];
     if (pageReviews.length === 0) break;
 
     allReviews.push(...pageReviews);
 
-    cursor = data.cursor;
+    cursor = response.cursor;
     if (!cursor) break;
   }
 

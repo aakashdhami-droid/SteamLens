@@ -1,0 +1,2 @@
+appid,game_name,raw_reviews,after_spam_filter,after_dedup,sampled_for_ai,duplicate_removal_rate_pct,review_reduction_pct,total_reduction_pct
+105600,"Terraria",300,291,93,17,68.04,81.72,94.33

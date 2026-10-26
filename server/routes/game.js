@@ -199,6 +199,20 @@ router.get("/collector/status", (req, res) => {
   res.json(getCollectorStatus());
 });
 
+// ── Development-only Benchmark Diagnostics ──
+if (process.env.NODE_ENV !== "production") {
+  const { getDevGroqCallCount, resetDevGroqCallCount } = require("../services/groqService");
+
+  router.get("/dev/groq-calls", (req, res) => {
+    res.json({ groqCallCount: getDevGroqCallCount() });
+  });
+
+  router.post("/dev/groq-calls/reset", (req, res) => {
+    resetDevGroqCallCount();
+    res.json({ groqCallCount: getDevGroqCallCount() });
+  });
+}
+
 module.exports = router;
 
 

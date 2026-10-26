@@ -1,0 +1,7 @@
+run_type,iteration,appid,game_name,cached,latency_ms,timestamp
+cold,1,105600,"Terraria",false,2980.93,2026-10-17T07:47:02.061Z
+warm,1,105600,"Terraria",true,3.31,2026-10-17T07:47:02.149Z
+warm,2,105600,"Terraria",true,2.69,2026-10-17T07:47:02.242Z
+warm,3,105600,"Terraria",true,3.56,2026-10-17T07:47:02.336Z
+warm,4,105600,"Terraria",true,5.23,2026-10-17T07:47:02.431Z
+warm,5,105600,"Terraria",true,3.41,2026-10-17T07:47:02.522Z

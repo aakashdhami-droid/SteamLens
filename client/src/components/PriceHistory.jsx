@@ -333,7 +333,7 @@ export default function PriceHistory({ appid }) {
             />
             <Tooltip content={<CustomTooltip />} />
             <Line
-              type="monotone"
+              type="stepAfter"
               dataKey="price_rupees"
               name="Price"
               stroke="#66c0f4"
