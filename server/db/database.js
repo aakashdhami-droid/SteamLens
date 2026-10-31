@@ -1,4 +1,11 @@
+const path = require("path");
 const { Pool } = require("pg");
+
+if (!process.env.DATABASE_URL) {
+  require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
+  require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+  require("dotenv").config();
+}
 
 let pool = null;
 let isPgConnected = false;
