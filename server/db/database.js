@@ -8,17 +8,25 @@ const memoryPriceHistory = [];
 
 function getPool() {
   if (!pool && process.env.DATABASE_URL) {
+    const url = process.env.DATABASE_URL;
+    const isNeon = url.includes("neon.tech");
+    const hasSslMode = url.includes("sslmode=require");
     const isLocal =
-      process.env.DATABASE_URL.includes("localhost") ||
-      process.env.DATABASE_URL.includes("127.0.0.1") ||
-      process.env.DATABASE_URL.includes("postgres:") ||
-      process.env.DATABASE_URL.includes("@postgres") ||
-      process.env.PGSSL === "false" ||
-      !process.env.DATABASE_URL.includes("sslmode=require");
+      !isNeon &&
+      !hasSslMode &&
+      (url.includes("localhost") ||
+        url.includes("127.0.0.1") ||
+        url.includes("@postgres:") ||
+        url.includes("@postgres/") ||
+        url.includes("postgres:5432") ||
+        process.env.PGSSL === "false");
+
+    // Prefer certificate verification for cloud databases (Neon certificates are signed by trusted CAs)
+    const rejectUnauthorized = process.env.PGSSL_REJECT_UNAUTHORIZED !== "false";
 
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: isLocal ? false : { rejectUnauthorized: false },
+      ssl: isLocal ? false : { rejectUnauthorized },
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,

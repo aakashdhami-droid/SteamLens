@@ -16,6 +16,8 @@ const {
 } = require("../db/database");
 const { runCollectorOnce, getCollectorStatus } = require("../services/priceCollector");
 const { searchSteam, rankAndFilter } = require("../services/searchService");
+const { aiAnalysisLimiter } = require("../middleware/rateLimiters");
+const { requireCollectorKey } = require("../middleware/collectorAuth");
 
 // ── Game Name Search ────────────────────────────────────────
 router.get("/search", async (req, res, next) => {
@@ -99,6 +101,20 @@ router.get("/game/:appid", async (req, res, next) => {
         reviews_sent_to_ai: cached.reviews_sent_to_ai,
         price_info,
       });
+    }
+
+    // Apply AI rate limiter only for cache misses (expensive AI analysis)
+    let rateLimitExceeded = false;
+    await new Promise((resolve, reject) => {
+      aiAnalysisLimiter(req, res, (err) => {
+        if (err) return reject(err);
+        rateLimitExceeded = res.headersSent;
+        resolve();
+      });
+    });
+
+    if (rateLimitExceeded || res.headersSent) {
+      return;
     }
 
     const [gameDetails, reviewData] = await Promise.all([
@@ -201,7 +217,7 @@ router.delete("/cache/:appid", async (req, res, next) => {
 
 // ── Background Collector Development / Monitoring Routes ──
 
-router.get("/collector/run", async (req, res, next) => {
+router.get("/collector/run", requireCollectorKey, async (req, res, next) => {
   try {
     const result = await runCollectorOnce();
     res.json(result);

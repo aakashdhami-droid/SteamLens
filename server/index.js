@@ -17,11 +17,19 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust first proxy hop behind Render's reverse proxy for correct client IP detection
+app.set("trust proxy", 1);
+
+const { isOriginAllowed } = require("./utils/corsConfig");
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. curl, server-to-server) or any client origin
-      callback(null, true);
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
     },
     methods: ["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
     credentials: true,

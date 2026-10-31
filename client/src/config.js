@@ -1,6 +1,9 @@
+const rawApiUrl = import.meta.env.VITE_API_URL;
+
 export const API_URL =
-  import.meta.env.VITE_API_URL !== undefined
-    ? import.meta.env.VITE_API_URL
+  rawApiUrl && rawApiUrl.trim() !== ""
+    ? rawApiUrl.trim().replace(/\/+$/, "")
     : import.meta.env.PROD
     ? ""
     : "http://localhost:3001";
+

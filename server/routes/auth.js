@@ -10,9 +10,10 @@ const {
 } = require("../services/authService");
 const { createUser, findUserByEmail, findUserById } = require("../db/database");
 const { requireAuth } = require("../middleware/auth");
+const { authLimiter } = require("../middleware/rateLimiters");
 
 // ── POST /api/auth/register ────────────────────────────────
-router.post("/register", async (req, res, next) => {
+router.post("/register", authLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -44,7 +45,7 @@ router.post("/register", async (req, res, next) => {
 });
 
 // ── POST /api/auth/login ───────────────────────────────────
-router.post("/login", async (req, res, next) => {
+router.post("/login", authLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
 

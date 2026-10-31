@@ -33,6 +33,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       PRICE_CHECK_INTERVAL_HOURS: ${PRICE_CHECK_INTERVAL_HOURS:-24}
       CLIENT_URL: ${CLIENT_URL:-http://localhost}
+      COLLECTOR_ADMIN_KEY: ${COLLECTOR_ADMIN_KEY}
       NODE_ENV: production
     ports:
       - "3001:3001"
