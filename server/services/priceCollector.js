@@ -4,6 +4,7 @@ const {
   updateTrackedGameAfterCheck,
   savePriceSnapshot,
   isPostgresConnected,
+  ensureDB,
 } = require("../db/database");
 
 let collectorIntervalId = null;
@@ -39,6 +40,12 @@ async function collectPriceChanges() {
       success: false,
       message: msg,
     };
+  }
+
+  if (!isPostgresConnected() && typeof ensureDB === "function") {
+    try {
+      await ensureDB();
+    } catch {}
   }
 
   if (!isPostgresConnected()) {
@@ -182,6 +189,13 @@ async function collectPriceChanges() {
  * Start periodic price collection
  */
 function startPriceCollector() {
+  if (process.env.VERCEL) {
+    console.log(
+      "⚡ [PriceCollector] Running on Vercel: Automatic background interval scheduling disabled. (Daily collection triggered via GitHub Actions -> /api/collector/run)"
+    );
+    return;
+  }
+
   const intervalHours = parseFloat(process.env.PRICE_CHECK_INTERVAL_HOURS) || 24;
   const intervalMs = intervalHours * 3600 * 1000;
 

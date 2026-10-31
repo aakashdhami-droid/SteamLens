@@ -4,7 +4,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const { initDB, closeDB, isPostgresConnected } = require("./db/database");
+const { initDB, ensureDB, closeDB, isPostgresConnected } = require("./db/database");
 const { startPriceCollector, stopPriceCollector } = require("./services/priceCollector");
 const gameRoutes = require("./routes/game");
 const authRoutes = require("./routes/auth");
@@ -38,6 +38,16 @@ app.use(
   })
 );
 app.use(express.json());
+
+// Ensure database connection & schema is initialized (crucial for serverless cold starts)
+app.use(async (req, res, next) => {
+  try {
+    await ensureDB();
+  } catch (err) {
+    console.warn("⚠️  Database initialization warning:", err.message);
+  }
+  next();
+});
 
 app.use("/api", gameRoutes);
 app.use("/api/auth", authRoutes);
@@ -76,11 +86,13 @@ app.use((err, req, res, next) => {
 
 async function start() {
   try {
-    await initDB();
+    await ensureDB();
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 SteamLens API running on http://0.0.0.0:${PORT}`);
-      startPriceCollector();
+      if (!process.env.VERCEL) {
+        startPriceCollector();
+      }
     });
   } catch (err) {
     console.error("❌ Failed to start server:", err.message);
@@ -101,6 +113,12 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 
-start();
+// In Vercel serverless environment, Vercel imports the app without calling listen().
+// Only start the server when run directly (local development, Docker, npm run dev).
+if (!process.env.VERCEL && require.main === module) {
+  start();
+}
+
+module.exports = app;
 
 

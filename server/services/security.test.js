@@ -328,3 +328,47 @@ describe("Security Hardening — Neon SSL & Docker PostgreSQL Compatibility", ()
     assert.strictEqual(resolveSsl(localUrl), false);
   });
 });
+
+describe("Vercel Serverless Function Compatibility", () => {
+  const { startPriceCollector, stopPriceCollector, getCollectorStatus } = require("./priceCollector");
+
+  afterEach(() => {
+    stopPriceCollector();
+    delete process.env.VERCEL;
+  });
+
+  it("disables automatic background interval scheduling when process.env.VERCEL is present", () => {
+    process.env.VERCEL = "1";
+    startPriceCollector();
+    const status = getCollectorStatus();
+    assert.strictEqual(status.running, false, "Collector timer should not run when VERCEL is set");
+  });
+
+  it("preserves automatic scheduling for local development when process.env.VERCEL is absent", () => {
+    delete process.env.VERCEL;
+    startPriceCollector();
+    const status = getCollectorStatus();
+    assert.strictEqual(status.running, true, "Collector timer should run for local/docker dev");
+    stopPriceCollector();
+  });
+
+  it("exports a valid Express application instance from server/index.js", () => {
+    process.env.VERCEL = "1";
+    const app = require("../index");
+    assert.strictEqual(typeof app, "function", "server/index.js must export an Express application");
+    assert.strictEqual(typeof app.use, "function", "Exported app must have Express middleware methods");
+    assert.strictEqual(typeof app.get, "function", "Exported app must have Express routing methods");
+  });
+
+  it("ensureDB is concurrency-safe and returns connection state", async () => {
+    const { ensureDB, isPostgresConnected } = require("../db/database");
+    assert.strictEqual(typeof ensureDB, "function", "ensureDB must be a function");
+
+    // Multiple simultaneous calls share the same initialization execution
+    const results = await Promise.all([ensureDB(), ensureDB(), ensureDB()]);
+    assert.strictEqual(results.length, 3);
+    for (const res of results) {
+      assert.strictEqual(res, isPostgresConnected());
+    }
+  });
+});

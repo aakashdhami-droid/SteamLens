@@ -30,11 +30,12 @@ function getPool() {
 
     // Prefer certificate verification for cloud databases (Neon certificates are signed by trusted CAs)
     const rejectUnauthorized = process.env.PGSSL_REJECT_UNAUTHORIZED !== "false";
+    const maxConnections = parseInt(process.env.PGMAX, 10) || (process.env.VERCEL ? 3 : 10);
 
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: isLocal ? false : { rejectUnauthorized },
-      max: 10,
+      max: maxConnections,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     });
@@ -44,6 +45,32 @@ function getPool() {
     });
   }
   return pool;
+}
+
+let initPromise = null;
+
+/**
+ * Idempotent, concurrency-safe database initialization for serverless cold starts.
+ * Ensures concurrent cold-start requests share a single initialization promise.
+ */
+async function ensureDB() {
+  if (isPgConnected) {
+    return true;
+  }
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        await initDB();
+        return isPgConnected;
+      } finally {
+        // If connection failed, allow future requests to retry
+        if (!isPgConnected) {
+          initPromise = null;
+        }
+      }
+    })();
+  }
+  return initPromise;
 }
 
 async function initDB() {
@@ -641,6 +668,7 @@ async function closeDB() {
 
 module.exports = {
   initDB,
+  ensureDB,
   getCached,
   saveSummary,
   getAllCached,
