@@ -69,6 +69,16 @@ router.get("/game/:appid", async (req, res, next) => {
       let price_info = null;
       try {
         price_info = await getLatestPrice(appid);
+
+        // If the game is tracked but has no price history (missed initial snapshot),
+        // attempt to fetch and save one now.
+        if (!price_info) {
+          const initialPrice = await fetchIndianPrice(appid);
+          if (initialPrice) {
+            await savePriceSnapshot(initialPrice);
+            price_info = await getLatestPrice(appid);
+          }
+        }
       } catch (err) {
         console.warn(`[GameRoute] Failed to get price for cached appid ${appid}:`, err.message);
       }
@@ -127,8 +137,13 @@ router.get("/game/:appid", async (req, res, next) => {
     // ── Price Tracking Integration ──
     let price_info = null;
     try {
-      const { isNew } = await addTrackedGame(appid, gameDetails.name);
-      if (isNew) {
+      await addTrackedGame(appid, gameDetails.name);
+
+      // Fetch initial price snapshot if none exists yet.
+      // This handles both brand-new games and previously tracked games
+      // whose initial snapshot was missed (e.g. due to a transient Steam API failure).
+      const existingPrice = await getLatestPrice(appid);
+      if (!existingPrice) {
         const initialPrice = await fetchIndianPrice(appid);
         if (initialPrice) {
           await savePriceSnapshot(initialPrice);
