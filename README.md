@@ -18,7 +18,7 @@ SteamLens is an AI-powered game intelligence platform that transforms raw Steam 
 1. **Instant AI Review Summaries** — 50–60 word syntheses of player sentiment using Groq's Llama 3 model.
 2. **Key Pros & Cons Extraction** — Top 3 strengths and weaknesses identified directly from curated player reviews.
 3. **Sentiment & Confidence Analysis** — Positive, Mixed, or Negative classification.
-4. **Purposeful Review Preprocessing Pipeline** — Spam/ASCII-art filtering, Jaccard/Dice deduplication, and sentiment-balanced stratified sampling.
+4. **Purposeful Review Preprocessing Pipeline** — Spam/emoji filtering (length, emoji, repetition, and printable-ASCII thresholds), word-level Jaccard similarity deduplication at a 0.7 threshold, and top-voted positive/negative plus most-recent review sampling (up to 25 reviews).
 5. **PostgreSQL Caching Layer** — 7-day TTL caching of analysis results for sub-second retrieval.
 6. **Indian Steam Price Tracking (INR)** — Real-time price and discount tracking in Indian Rupees (paise-accurate).
 7. **Interactive Price History Charts** — Price drop and discount visualizations built with Recharts.

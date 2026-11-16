@@ -1,7 +1,7 @@
 # SteamLens Performance Benchmark Report
 
-**Generated:** 2026-10-17T07:47:02.525Z  
-**Environment:** Node.js v22.20.0 (win32 x64)  
+**Generated:** 2026-11-16T16:51:08.360Z  
+**Environment:** Node.js v27.0.0-alpha.0.0.0 (win32 x64)  
 **Target Host:** `http://localhost:3001` | **Database State:** `connected`  
 **Evaluated Game:** **Terraria** (App ID: `105600`)
 
@@ -18,26 +18,26 @@ This benchmark measures the real-world performance gains achieved by SteamLens's
 ## 2. Benchmark A: Caching Performance
 
 ### Measured Latency & Acceleration
-* **Cold Request Latency:** `2980.93 ms` *(Full pipeline: Steam App Details + Steam Reviews + Preprocessing + Groq AI Summarization + PostgreSQL Write)*
-* **Median Warm Latency:** `3.41 ms` *(PostgreSQL indexed lookup)*
-* **Latency Reduction:** **`99.89%`**
-* **Speedup Factor:** **`874.2x`** faster response time
+* **Cold Request Latency:** `4579.64 ms` *(Full pipeline: Steam App Details + Steam Reviews + Preprocessing + Groq AI Summarization + PostgreSQL Write)*
+* **Median Warm Latency:** `132.62 ms` *(PostgreSQL indexed lookup)*
+* **Latency Reduction:** **`97.10%`**
+* **Speedup Factor:** **`34.5x`** faster response time
 
-$$\text{Latency Reduction} = \frac{2980.93 - 3.41}{2980.93} \times 100 = 99.89\%$$
+$$\text{Latency Reduction} = \frac{4579.64 - 132.62}{4579.64} \times 100 = 97.10\%$$
 
 ### Warm-Cache Repetition Breakdown (N=5)
 
 | Iteration | Latency (ms) | Cache Header (`cached`) | External Invocations Avoided |
 | :--- | :--- | :--- | :--- |
-| **Cold (Uncached)** | **2980.93 ms** | `false` | None (Baseline cold run) |
-| Warm #1 | 3.31 ms | `true` | Steam API & Groq LLM avoided |
-| Warm #2 | 2.69 ms | `true` | Steam API & Groq LLM avoided |
-| Warm #3 | 3.56 ms | `true` | Steam API & Groq LLM avoided |
-| Warm #4 | 5.23 ms | `true` | Steam API & Groq LLM avoided |
-| Warm #5 | 3.41 ms | `true` | Steam API & Groq LLM avoided |
-| **Warm Median** | **3.41 ms** | `true` | Confirmed |
-| **Warm Mean** | 3.64 ms | `true` | Confirmed |
-| **Warm Range** | 2.69 ms – 5.23 ms | `true` | Confirmed |
+| **Cold (Uncached)** | **4579.64 ms** | `false` | None (Baseline cold run) |
+| Warm #1 | 132.90 ms | `true` | Steam API & Groq LLM avoided |
+| Warm #2 | 132.16 ms | `true` | Steam API & Groq LLM avoided |
+| Warm #3 | 132.62 ms | `true` | Steam API & Groq LLM avoided |
+| Warm #4 | 132.80 ms | `true` | Steam API & Groq LLM avoided |
+| Warm #5 | 131.97 ms | `true` | Steam API & Groq LLM avoided |
+| **Warm Median** | **132.62 ms** | `true` | Confirmed |
+| **Warm Mean** | 132.49 ms | `true` | Confirmed |
+| **Warm Range** | 131.97 ms – 132.90 ms | `true` | Confirmed |
 
 ### Verification of LLM Call Avoidance
 * **Initial Groq API Count:** `0`
@@ -56,19 +56,19 @@ SteamLens filters and condenses raw user reviews before passing them to the Groq
 | Pipeline Stage | Review Count | Drop from Prior Stage | Stage Efficiency Metric |
 | :--- | :--- | :--- | :--- |
 | **1. Raw Reviews Fetched** | **300** | — | Initial Steam payload ceiling |
-| **2. After Spam Filter** | **291** | -9 | Filtered low-effort, emoji, & ASCII-invalid reviews |
-| **3. After Deduplication** | **93** | -198 | **Duplicate-Removal Rate: 68.04%** |
-| **4. Sampled for Groq AI** | **17** | -76 | **LLM Input Reduction: 81.72%** |
+| **2. After Spam Filter** | **297** | -3 | Filtered low-effort, emoji, & ASCII-invalid reviews |
+| **3. After Deduplication** | **297** | -0 | **Duplicate-Removal Rate: 0.00%** |
+| **4. Sampled for Groq AI** | **18** | -279 | **LLM Input Reduction: 93.94%** |
 
 ### Key Formula Results:
 1. **Duplicate-Removal Rate:**
-   $$\frac{\text{afterSpamFilter} - \text{afterDedup}}{\text{afterSpamFilter}} \times 100 = \frac{291 - 93}{291} \times 100 = \mathbf{68.04\%}$$
+   $$\frac{\text{afterSpamFilter} - \text{afterDedup}}{\text{afterSpamFilter}} \times 100 = \frac{297 - 297}{297} \times 100 = \mathbf{0.00\%}$$
 
 2. **Review-Input Reduction for LLM Analysis:**
-   $$\frac{\text{afterDedup} - \text{sampled}}{\text{afterDedup}} \times 100 = \frac{93 - 17}{93} \times 100 = \mathbf{81.72\%}$$
+   $$\frac{\text{afterDedup} - \text{sampled}}{\text{afterDedup}} \times 100 = \frac{297 - 18}{297} \times 100 = \mathbf{93.94\%}$$
 
 3. **Cumulative End-to-End Reduction:**
-   $$\frac{\text{raw} - \text{sampled}}{\text{raw}} \times 100 = \frac{300 - 17}{300} \times 100 = \mathbf{94.33\%}$$
+   $$\frac{\text{raw} - \text{sampled}}{\text{raw}} \times 100 = \frac{300 - 18}{300} \times 100 = \mathbf{94.00\%}$$
 
 ---
 

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node --test services/steamService.test.js services/priceTracking.test.js services/security.test.js"
+    "test": "node --test services/steamService.test.js services/priceTracking.test.js services/security.test.js services/reviewProcessor.test.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
